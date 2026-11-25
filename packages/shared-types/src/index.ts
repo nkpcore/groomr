@@ -31,6 +31,14 @@ export type BookingStatus =
   | "EXPIRED"
   | "NO_SHOW";
 
+export type ServiceCategory =
+  | "HAIRCUT"
+  | "BEARD"
+  | "SHAVE"
+  | "FACIAL"
+  | "PACKAGE"
+  | "COLOR";
+
 export type BranchVerificationStatus =
   | "UNVERIFIED"
   | "PENDING"
@@ -217,6 +225,134 @@ export interface AuditLogListResponseDto {
   items: AuditLogItemDto[];
 }
 
+export interface BranchServicePreviewDto {
+  id: string;
+  code: string;
+  category: ServiceCategory;
+  display_name_en: string;
+  display_name_hi: string;
+  description: string | null;
+  price_paise: number;
+  duration_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+}
+
+export interface BranchDiscoveryItemDto {
+  id: string;
+  salon_id: string;
+  brand_name: string;
+  name: string;
+  slug: string;
+  address_line1: string;
+  city: string;
+  state: string;
+  pincode: string;
+  lat: number;
+  lng: number;
+  distance_meters: number | null;
+  verification_status: BranchVerificationStatus;
+  is_featured: boolean;
+  featured_disclosure_label: string | null;
+  online_booking_paused: boolean;
+  is_open_now: boolean;
+  starting_price_paise: number | null;
+  avg_rating: number | null;
+  review_count: number;
+  categories: ServiceCategory[];
+  service_previews: BranchServicePreviewDto[];
+  next_available_slot_at: string | null;
+}
+
+export interface BranchListResponseDto {
+  items: BranchDiscoveryItemDto[];
+  total_count: number;
+  verification_badge_disclaimer: string;
+}
+
+export interface PublicStaffItemDto {
+  id: string;
+  display_name: string;
+  bio: string | null;
+  specializations: string[];
+  is_verified_staff: boolean;
+  is_accepting_bookings: boolean;
+  qualified_branch_service_ids: string[];
+}
+
+export interface PublicReviewItemDto {
+  id: string;
+  rating: number;
+  hygiene_rating: number;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface RatingSummaryDto {
+  avg_rating: number | null;
+  avg_hygiene_rating: number | null;
+  review_count: number;
+  recent_reviews: PublicReviewItemDto[];
+}
+
+export interface InspectionSummaryDto {
+  overall_outcome: string;
+  completed_at: string | null;
+  numerical_score: number | null;
+}
+
+export interface BranchDetailResponseDto {
+  id: string;
+  salon_id: string;
+  brand_name: string;
+  name: string;
+  slug: string;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  lat: number;
+  lng: number;
+  operating_hours_json: Record<string, { open?: string; close?: string; closed?: boolean }>;
+  verification_status: BranchVerificationStatus;
+  verification_badge_disclaimer: string;
+  is_featured: boolean;
+  featured_disclosure_label: string | null;
+  online_booking_paused: boolean;
+  is_open_now: boolean;
+  chair_count: number;
+  services: BranchServicePreviewDto[];
+  staff: PublicStaffItemDto[];
+  rating_summary: RatingSummaryDto;
+  latest_inspection: InspectionSummaryDto | null;
+}
+
+export interface SlotStaffOptionDto {
+  staff_id: string;
+  display_name: string;
+  is_verified_staff: boolean;
+  duration_minutes: number;
+  end_at: string;
+}
+
+export interface AvailableSlotDto {
+  start_at: string;
+  end_at: string;
+  duration_minutes: number;
+  available_staff: SlotStaffOptionDto[];
+  available_chair_count: number;
+}
+
+export interface AvailabilityResponseDto {
+  branch_id: string;
+  date: string;
+  timezone: string;
+  online_booking_paused: boolean;
+  is_branch_closed: boolean;
+  slots: AvailableSlotDto[];
+}
+
 export const CHAIR_PALETTE = {
   ivoryCanvas: "#FAF7F2",
   ivorySurface: "#F4EFE6",
@@ -282,4 +418,38 @@ export function formatINRFromPaise(paise: number): string {
     return `${sign}₹${formattedRupees}`;
   }
   return `${sign}₹${formattedRupees}.${String(remPaise).padStart(2, "0")}`;
+}
+
+export function formatDistanceMeters(
+  meters: number | null | undefined,
+  locale: SupportedLocale = "en"
+): string | null {
+  if (meters === null || meters === undefined || Number.isNaN(meters)) {
+    return null;
+  }
+  if (meters < 1000) {
+    return locale === "hi" ? `${Math.round(meters)} मी` : `${Math.round(meters)} m`;
+  }
+  const km = (Math.round((meters / 1000) * 10) / 10).toFixed(1);
+  return locale === "hi" ? `${km} किमी` : `${km} km`;
+}
+
+export function formatDurationMinutes(
+  minutes: number,
+  locale: SupportedLocale = "en"
+): string {
+  return locale === "hi" ? `${minutes} मिनट` : `${minutes} min`;
+}
+
+export function formatIstTimeSlot(isoUtc: string, locale: SupportedLocale = "en"): string {
+  const dt = new Date(isoUtc);
+  if (Number.isNaN(dt.getTime())) {
+    return isoUtc;
+  }
+  return new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(dt);
 }

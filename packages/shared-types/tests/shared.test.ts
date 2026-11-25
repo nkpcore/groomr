@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatDistanceMeters,
+  formatDurationMinutes,
   formatINRFromPaise,
+  formatIstTimeSlot,
   getTranslations,
   I18N_DICTIONARIES,
   isValidOtpCode,
@@ -38,4 +41,13 @@ test("en and hi dictionaries share identical top-level and nested keys", () => {
   for (const section of Object.keys(en) as Array<keyof typeof I18N_DICTIONARIES.en>) {
     assert.deepEqual(Object.keys(en[section]), Object.keys(hi[section]));
   }
+});
+
+test("distance, duration, and IST slot formatters produce crisp EN and HI outputs", () => {
+  assert.equal(formatDistanceMeters(450, "en"), "450 m");
+  assert.equal(formatDistanceMeters(1450, "en"), "1.5 km");
+  assert.equal(formatDistanceMeters(1450, "hi"), "1.5 किमी");
+  assert.equal(formatDurationMinutes(30, "en"), "30 min");
+  assert.equal(formatDurationMinutes(30, "hi"), "30 मिनट");
+  assert.ok(formatIstTimeSlot("2026-11-26T05:00:00Z", "en").includes("10:30"));
 });

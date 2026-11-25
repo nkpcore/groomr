@@ -12,20 +12,22 @@ import {
 } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AlertCircle, CheckCircle2, Lock, ShieldCheck, Smartphone, WifiOff } from "lucide-react-native";
+import { AlertCircle, CheckCircle2, Lock, Smartphone, WifiOff } from "lucide-react-native";
 import {
   ALL_CONSENT_TYPES,
-  getTranslations,
   isValidOtpCode,
   normalizePhoneE164,
   type ConsentType,
   type OTPRequestResponse,
-  type SupportedLocale,
-  type UserProfileDto,
 } from "@chair/shared-types";
 import {
+  LanguageSwitcher,
+  VerifiedDisclaimerFooter,
+  formatMobileError,
+} from "@/components/MobileSharedChrome";
+import { useMobileApp } from "@/context/MobileAppContext";
+import {
   fetchMobileProfile,
-  logoutMobileSession,
   MobileApiError,
   requestMobileOtp,
   updateMobileConsents,
@@ -33,13 +35,7 @@ import {
   verifyMobileOtp,
 } from "@/services/authApi";
 import { fetchMobileHealth } from "@/services/health";
-import {
-  clearMobileSession,
-  loadMobileSession,
-  mobileSessionFromTokens,
-  saveMobileSession,
-  type StoredMobileSession,
-} from "@/services/tokenStorage";
+import { mobileSessionFromTokens, saveMobileSession } from "@/services/tokenStorage";
 import { MOBILE_THEME, TOUCH_TARGET_MIN_DP } from "@/theme/tokens";
 
 const CONSENT_KEYS: Record<
@@ -66,26 +62,20 @@ const CONSENT_KEYS: Record<
   MARKETING: { label: "consentMarketingLabel", desc: "consentMarketingDesc" },
 };
 
-function formatMobileError(err: unknown, t: ReturnType<typeof getTranslations>): string {
-  if (err instanceof MobileApiError) {
-    if (err.code === "OFFLINE") {
-      return t.states.offline;
-    }
-    if (err.code === "NETWORK_ERROR") {
-      return t.states.networkError;
-    }
-    return err.message;
-  }
-  return err instanceof Error ? err.message : t.states.error;
-}
-
-export default function CustomerAuthScreen() {
-  const [locale, setLocale] = useState<SupportedLocale>("en");
-  const t = getTranslations(locale);
-
-  const [session, setSession] = useState<StoredMobileSession | null>(null);
-  const [sessionHydrating, setSessionHydrating] = useState(true);
-  const [profile, setProfile] = useState<UserProfileDto | null>(null);
+export default function CustomerAccountScreen() {
+  const {
+    locale,
+    setLocale,
+    t,
+    session,
+    setSession,
+    profile,
+    setProfile,
+    sessionHydrating,
+    hydrationError,
+    retryHydration,
+    handleSignOut,
+  } = useMobileApp();
 
   const [authStep, setAuthStep] = useState<"phone" | "otp">("phone");
   const [phoneInput, setPhoneInput] = useState("");
@@ -111,76 +101,34 @@ export default function CustomerAuthScreen() {
     queryFn: () => fetchMobileHealth(),
   });
 
+  const profileId = profile?.id ?? null;
+  const profileFullName = profile?.full_name ?? "";
+  const profileEmail = profile?.email ?? "";
+  const profileConsents = profile?.consents;
+
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const stored = await loadMobileSession();
-        if (!active || !stored) {
-          return;
-        }
-        setSession(stored);
-        setLocale(stored.preferredLocale);
-        const me = await fetchMobileProfile(stored, (next) => {
-          setSession(next);
-          if (!next) {
-            setProfile(null);
-          }
-        });
-        if (!active) {
-          return;
-        }
-        setProfile(me);
-        setLocale(me.preferred_locale);
-        syncProfileForm(me);
-      } catch (err) {
-        if (!active) {
-          return;
-        }
-        if (err instanceof MobileApiError && (err.status === 401 || err.status === 403)) {
-          await clearMobileSession();
-          setSession(null);
-          setProfile(null);
-        } else {
-          setIsOfflineError(err instanceof MobileApiError && err.code === "OFFLINE");
-          setAuthError(formatMobileError(err, getTranslations("en")));
-        }
-      } finally {
-        if (active) {
-          setSessionHydrating(false);
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  function syncProfileFields(me: UserProfileDto) {
-    setFullNameInput(me.full_name ?? "");
-    setEmailInput(me.email ?? "");
-  }
-
-  function syncConsentFields(me: UserProfileDto) {
-    const nextConsents = {
-      TERMS: false,
-      PRIVACY_DPDP: false,
-      LOCATION: false,
-      STYLE_PASSPORT_PHOTOS: false,
-      MARKETING: false,
-    };
-    for (const ctype of ALL_CONSENT_TYPES) {
-      const found = me.consents.find((c) => c.consent_type === ctype);
-      nextConsents[ctype] = Boolean(found?.granted);
+    if (profileId) {
+      setFullNameInput(profileFullName);
+      setEmailInput(profileEmail);
     }
-    setConsentMap(nextConsents);
-  }
+  }, [profileId, profileFullName, profileEmail]);
 
-  function syncProfileForm(me: UserProfileDto) {
-    syncProfileFields(me);
-    syncConsentFields(me);
-  }
+  useEffect(() => {
+    if (profileId && profileConsents) {
+      const nextConsents: Record<ConsentType, boolean> = {
+        TERMS: false,
+        PRIVACY_DPDP: false,
+        LOCATION: false,
+        STYLE_PASSPORT_PHOTOS: false,
+        MARKETING: false,
+      };
+      for (const ctype of ALL_CONSENT_TYPES) {
+        const found = profileConsents.find((c) => c.consent_type === ctype);
+        nextConsents[ctype] = Boolean(found?.granted);
+      }
+      setConsentMap(nextConsents);
+    }
+  }, [profileId, profileConsents]);
 
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
@@ -217,7 +165,13 @@ export default function CustomerAuthScreen() {
       });
       const stored = mobileSessionFromTokens(tokens);
       await saveMobileSession(stored);
-      const me = await fetchMobileProfile(stored);
+      setSession(stored);
+      const me = await fetchMobileProfile(stored, (next) => {
+        setSession(next);
+        if (!next) {
+          setProfile(null);
+        }
+      });
       return { stored, me };
     },
     onSuccess: ({ stored, me }) => {
@@ -226,7 +180,6 @@ export default function CustomerAuthScreen() {
       setSession(stored);
       setProfile(me);
       setLocale(me.preferred_locale);
-      syncProfileForm(me);
     },
     onError: (err) => {
       setIsOfflineError(err instanceof MobileApiError && err.code === "OFFLINE");
@@ -250,13 +203,17 @@ export default function CustomerAuthScreen() {
           email: trimmedEmail || null,
           preferred_locale: locale,
         },
-        (next) => setSession(next)
+        (next) => {
+          setSession(next);
+          if (!next) {
+            setProfile(null);
+          }
+        }
       );
     },
     onSuccess: (updated) => {
       setAuthError(null);
       setProfile((prev) => (prev ? { ...prev, ...updated, consents: prev.consents } : updated));
-      syncProfileFields(updated);
       setStatusNotice(t.profile.profileSaved);
     },
     onError: (err) => {
@@ -279,7 +236,12 @@ export default function CustomerAuthScreen() {
             version: "v1.0",
           })),
         },
-        (next) => setSession(next)
+        (next) => {
+          setSession(next);
+          if (!next) {
+            setProfile(null);
+          }
+        }
       );
     },
     onSuccess: (updatedConsents) => {
@@ -293,22 +255,12 @@ export default function CustomerAuthScreen() {
     },
   });
 
-  async function handleSignOut() {
-    if (!session) {
-      return;
-    }
-    try {
-      await logoutMobileSession(session);
-    } catch {
-      // Clear local UI state cleanly even if network/token revoke fails.
-    } finally {
-      setSession(null);
-      setProfile(null);
-      setAuthError(null);
-      setIsOfflineError(false);
-      setAuthStep("phone");
-      setStatusNotice(null);
-    }
+  async function onSignOutPress() {
+    await handleSignOut();
+    setAuthError(null);
+    setIsOfflineError(false);
+    setAuthStep("phone");
+    setStatusNotice(null);
   }
 
   const probe = healthQuery.data;
@@ -318,34 +270,13 @@ export default function CustomerAuthScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           <View style={styles.brandBlock}>
-            <Text style={styles.titleText}>
-              {t.brand.name} · {t.surfaces.customer}
-            </Text>
+            <Text style={styles.titleText}>{t.navigation.accountTab}</Text>
           </View>
 
-          <View style={styles.langRow}>
-            {(["en", "hi"] as const).map((lang) => (
-              <Pressable
-                key={lang}
-                accessibilityRole="button"
-                accessibilityState={{ selected: locale === lang }}
-                onPress={() => setLocale(lang)}
-                style={[styles.langButton, locale === lang && styles.langButtonActive]}
-              >
-                <Text
-                  style={[
-                    styles.langButtonText,
-                    locale === lang && styles.langButtonTextActive,
-                  ]}
-                >
-                  {lang === "en" ? "EN" : "हिन्दी"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <LanguageSwitcher locale={locale} onChange={setLocale} />
         </View>
 
-        {isOfflineError && (
+        {(isOfflineError || hydrationError === "offline") && !(session && !profile) && (
           <View style={styles.offlineBox}>
             <WifiOff size={18} color={MOBILE_THEME.colors.bronzeAccent} />
             <Text style={styles.detailText}>{t.states.offline}</Text>
@@ -373,6 +304,38 @@ export default function CustomerAuthScreen() {
             <View style={styles.stateRow}>
               <ActivityIndicator color={MOBILE_THEME.colors.olivePrimary} />
               <Text style={styles.stateText}>{t.states.loading}</Text>
+            </View>
+          </View>
+        ) : session && !profile ? (
+          <View style={styles.panel}>
+            <View style={styles.stateRow}>
+              {hydrationError === "offline" || isOfflineError ? (
+                <WifiOff size={20} color={MOBILE_THEME.colors.bronzeAccent} />
+              ) : (
+                <AlertCircle size={20} color={MOBILE_THEME.colors.danger} />
+              )}
+              <Text style={styles.sectionTitle}>
+                {hydrationError === "offline" || isOfflineError
+                  ? t.states.offline
+                  : t.states.networkError}
+              </Text>
+            </View>
+            <Text style={styles.noticeText}>{t.states.error}</Text>
+            <View style={styles.buttonRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void retryHydration()}
+                style={styles.primaryButton}
+              >
+                <Text style={styles.primaryButtonText}>{t.health.retry}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void onSignOutPress()}
+                style={styles.secondaryButton}
+              >
+                <Text style={styles.secondaryButtonText}>{t.auth.signOutButton}</Text>
+              </Pressable>
             </View>
           </View>
         ) : !session || !profile ? (
@@ -485,7 +448,7 @@ export default function CustomerAuthScreen() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => void handleSignOut()}
+                  onPress={() => void onSignOutPress()}
                   style={styles.secondaryButton}
                 >
                   <Text style={styles.secondaryButtonText}>{t.auth.signOutButton}</Text>
@@ -542,24 +505,33 @@ export default function CustomerAuthScreen() {
 
               {ALL_CONSENT_TYPES.map((ctype) => {
                 const keys = CONSENT_KEYS[ctype];
+                const checked = consentMap[ctype];
                 return (
-                  <View key={ctype} style={styles.consentRow}>
+                  <Pressable
+                    key={ctype}
+                    accessibilityRole="switch"
+                    accessibilityLabel={t.consents[keys.label]}
+                    accessibilityState={{ checked }}
+                    onPress={() =>
+                      setConsentMap((prev) => ({ ...prev, [ctype]: !prev[ctype] }))
+                    }
+                    style={styles.consentRow}
+                  >
                     <View style={styles.brandBlock}>
                       <Text style={styles.fieldLabel}>{t.consents[keys.label]}</Text>
                       <Text style={styles.hintText}>{t.consents[keys.desc]}</Text>
                     </View>
-                    <Switch
-                      accessibilityLabel={t.consents[keys.label]}
-                      value={consentMap[ctype]}
-                      onValueChange={(nextVal) =>
-                        setConsentMap((prev) => ({ ...prev, [ctype]: nextVal }))
-                      }
-                      trackColor={{
-                        false: MOBILE_THEME.colors.ivoryBorder,
-                        true: MOBILE_THEME.colors.olivePrimary,
-                      }}
-                    />
-                  </View>
+                    <View pointerEvents="none">
+                      <Switch
+                        accessible={false}
+                        value={checked}
+                        trackColor={{
+                          false: MOBILE_THEME.colors.ivoryBorder,
+                          true: MOBILE_THEME.colors.olivePrimary,
+                        }}
+                      />
+                    </View>
+                  </Pressable>
                 );
               })}
 
@@ -580,7 +552,6 @@ export default function CustomerAuthScreen() {
         )}
 
         <View style={styles.panel}>
-          <Text style={styles.hintText}>{t.health.phaseNotice}</Text>
           {healthQuery.isPending ? (
             <View style={styles.stateRow}>
               <ActivityIndicator color={MOBILE_THEME.colors.olivePrimary} />
@@ -608,12 +579,9 @@ export default function CustomerAuthScreen() {
           )}
         </View>
 
-        <View style={styles.footer}>
-          <ShieldCheck size={16} color={MOBILE_THEME.colors.olivePrimary} />
-          <Text style={styles.disclaimer}>
-            {t.brand.verifiedBadge}: {t.brand.verifiedDisclaimer}
-          </Text>
-        </View>
+        <VerifiedDisclaimerFooter
+          disclaimerText={`${t.brand.verifiedBadge}: ${t.brand.verifiedDisclaimer}`}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -646,33 +614,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     color: MOBILE_THEME.colors.charcoalInk,
-  },
-  langRow: {
-    flexDirection: "row",
-    gap: MOBILE_THEME.spacing.sm,
-  },
-  langButton: {
-    minWidth: TOUCH_TARGET_MIN_DP,
-    minHeight: TOUCH_TARGET_MIN_DP,
-    paddingHorizontal: 12,
-    borderRadius: MOBILE_THEME.radii.sm,
-    borderWidth: 1,
-    borderColor: MOBILE_THEME.colors.ivoryBorder,
-    backgroundColor: MOBILE_THEME.colors.ivorySurface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  langButtonActive: {
-    backgroundColor: MOBILE_THEME.colors.olivePrimary,
-    borderColor: MOBILE_THEME.colors.olivePrimary,
-  },
-  langButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: MOBILE_THEME.colors.charcoalInk,
-  },
-  langButtonTextActive: {
-    color: MOBILE_THEME.colors.white,
   },
   panel: {
     padding: MOBILE_THEME.spacing.lg,
@@ -821,17 +762,6 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 13,
-    color: MOBILE_THEME.colors.charcoalMuted,
-  },
-  footer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: MOBILE_THEME.spacing.sm,
-  },
-  disclaimer: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
     color: MOBILE_THEME.colors.charcoalMuted,
   },
 });
