@@ -1,0 +1,85 @@
+"""Export all ORM models so Alembic metadata discovers every table."""
+
+from chair_api.db.models.billing import (
+    CommissionLedger,
+    Payment,
+    PaymentEvent,
+    Refund,
+    Settlement,
+    Subscription,
+    SubscriptionInvoice,
+    SubscriptionPlan,
+)
+from chair_api.db.models.booking import (
+    Booking,
+    BookingAllocation,
+    BookingItem,
+    IdempotencyKey,
+    SlotHold,
+    WalkIn,
+)
+from chair_api.db.models.catalog import (
+    BranchService,
+    Resource,
+    ScheduleBlock,
+    Service,
+    Staff,
+    StaffService,
+    StaffShift,
+)
+from chair_api.db.models.identity import User, UserConsent, UserRoleAssignment
+from chair_api.db.models.marketplace import (
+    Branch,
+    Inspection,
+    Salon,
+    SalonDocument,
+    ServiceZone,
+    VerificationCheck,
+)
+from chair_api.db.models.trust import (
+    AuditLog,
+    Notification,
+    Review,
+    StylePhoto,
+    StyleProfile,
+    SupportCase,
+)
+
+__all__ = [
+    "AuditLog",
+    "Booking",
+    "BookingAllocation",
+    "BookingItem",
+    "Branch",
+    "BranchService",
+    "CommissionLedger",
+    "IdempotencyKey",
+    "Inspection",
+    "Notification",
+    "Payment",
+    "PaymentEvent",
+    "Refund",
+    "Resource",
+    "Review",
+    "Salon",
+    "SalonDocument",
+    "ScheduleBlock",
+    "Service",
+    "ServiceZone",
+    "Settlement",
+    "SlotHold",
+    "Staff",
+    "StaffService",
+    "StaffShift",
+    "StylePhoto",
+    "StyleProfile",
+    "Subscription",
+    "SubscriptionInvoice",
+    "SubscriptionPlan",
+    "SupportCase",
+    "User",
+    "UserConsent",
+    "UserRoleAssignment",
+    "VerificationCheck",
+    "WalkIn",
+]

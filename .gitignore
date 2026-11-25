@@ -1,0 +1,46 @@
+# Environments & secrets
+.env
+.env.*
+!.env.example
+
+# Local private object storage & runtime artifacts
+.storage/
+*.log
+*.tmp
+
+# Python / uv / pytest
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node / Expo / Next.js
+node_modules/
+.next/
+out/
+.expo/
+dist/
+dist-test/
+build/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/*.log
+
+# Impeccable & MCP runtime artifacts (keep PRODUCT.md, DESIGN.md, surfaces, config.json)
+.github/context-mode/
+.impeccable/config.local.json
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/critique/
+.impeccable/build/

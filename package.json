@@ -1,0 +1,22 @@
+{
+  "name": "chair-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CHAIR — Hyperlocal Men's Grooming Marketplace & Salon SaaS",
+  "workspaces": [
+    "packages/*",
+    "apps/web",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace=@chair/shared-types",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "lint": "npm run build:shared && npm run lint --workspaces --if-present",
+    "test": "npm run build:shared && npm run test --workspaces --if-present",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:mobile": "npm run start --workspace=apps/mobile",
+    "api:test": "uv --directory apps/api run pytest -q",
+    "api:lint": "uv --directory apps/api run ruff check src tests",
+    "api:typecheck": "uv --directory apps/api run mypy src"
+  }
+}

@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  accent-color: var(--chair-olive);
+  scrollbar-color: var(--chair-charcoal-muted) var(--chair-ivory-surface);
+  --chair-ivory: #FAF7F2;
+  --chair-ivory-surface: #F4EFE6;
+  --chair-border: #E2DACD;
+  --chair-charcoal: #1C1B19;
+  --chair-charcoal-muted: #524E48;
+  --chair-olive: #4A5D4E;
+  --chair-olive-soft: #E7ECE8;
+  --chair-bronze: #9C744F;
+  --chair-bronze-soft: #F3EAE1;
+  --chair-danger: #9E3B33;
+  --chair-danger-soft: #F9ECEA;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--chair-ivory);
+    color: var(--chair-charcoal);
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: #E7ECE8;
+    color: #1C1B19;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--chair-olive);
+    outline-offset: 2px;
+  }
+}
+
+.chair-input {
+  min-height: 48px;
+  font-size: max(1rem, 1em);
+  border-color: #767168;
+}
+
+.chair-input:user-invalid,
+.chair-input[aria-invalid="true"] {
+  border-color: var(--chair-danger);
+  background-color: var(--chair-danger-soft);
+}
+
+.chair-input:user-valid {
+  border-color: var(--chair-olive);
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+.skip-link:focus-visible {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 50;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  background-color: var(--chair-charcoal);
+  color: #FFFFFF;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
