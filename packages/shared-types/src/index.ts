@@ -453,3 +453,173 @@ export function formatIstTimeSlot(isoUtc: string, locale: SupportedLocale = "en"
     hour12: true,
   }).format(dt);
 }
+
+export function formatIstDateTime(isoUtc: string, locale: SupportedLocale = "en"): string {
+  const dt = new Date(isoUtc);
+  if (Number.isNaN(dt.getTime())) {
+    return isoUtc;
+  }
+  return new Intl.DateTimeFormat(locale === "hi" ? "hi-IN" : "en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(dt);
+}
+
+export type WalkInStatus =
+  | "WAITING"
+  | "SEATED"
+  | "IN_SERVICE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
+
+export interface CreateHoldRequestDto {
+  branch_id: string;
+  branch_service_ids: string[];
+  start_at: string;
+  staff_id?: string | null;
+  notes?: string | null;
+}
+
+export interface HoldItemPreviewDto {
+  branch_service_id: string;
+  service_name_en: string;
+  service_name_hi: string;
+  category: ServiceCategory;
+  unit_price_paise: number;
+  duration_minutes: number;
+}
+
+export interface HoldCreationResponseDto {
+  hold_id: string;
+  booking_id: string;
+  booking_code: string;
+  status: BookingStatus;
+  hold_status: "ACTIVE" | "CONVERTED" | "RELEASED" | "EXPIRED";
+  expires_at: string;
+  hold_ttl_seconds: number;
+  branch_id: string;
+  branch_name: string;
+  staff_id: string;
+  staff_name: string;
+  resource_id: string | null;
+  resource_name: string | null;
+  scheduled_start_at: string;
+  scheduled_end_at: string;
+  total_price_paise: number;
+  discount_paise: number;
+  net_payable_paise: number;
+  items: HoldItemPreviewDto[];
+}
+
+export interface BookingItemSnapshotDto {
+  id: string;
+  branch_service_id: string | null;
+  service_name_snapshot: string;
+  category_snapshot: ServiceCategory;
+  unit_price_paise_snapshot: number;
+  duration_minutes_snapshot: number;
+}
+
+export interface PaymentSummaryDto {
+  id: string;
+  provider: "PAY_AT_SALON" | "TEST_MODE" | "RAZORPAY";
+  provider_order_id: string | null;
+  provider_payment_id: string | null;
+  amount_paise: number;
+  currency: string;
+  status: string;
+  paid_at: string | null;
+}
+
+export interface RefundSummaryDto {
+  id: string;
+  amount_paise: number;
+  reason: string;
+  status: string;
+  provider_refund_id: string | null;
+}
+
+export interface BookingDetailDto {
+  id: string;
+  booking_code: string;
+  status: BookingStatus;
+  source: "PLATFORM" | "WALK_IN";
+  booking_mode: "INSTANT" | "REQUEST";
+  branch_id: string;
+  branch_name: string;
+  branch_city: string;
+  slot_hold_id: string | null;
+  hold_expires_at: string | null;
+  hold_status: string | null;
+  staff_id: string | null;
+  staff_name: string | null;
+  resource_id: string | null;
+  resource_name: string | null;
+  scheduled_start_at: string;
+  scheduled_end_at: string;
+  total_price_paise: number;
+  discount_paise: number;
+  net_payable_paise: number;
+  notes: string | null;
+  check_in_otp: string | null;
+  completion_otp: string | null;
+  checked_in_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  items: BookingItemSnapshotDto[];
+  payment: PaymentSummaryDto | null;
+  refund: RefundSummaryDto | null;
+  has_review: boolean;
+}
+
+export interface HoldDetailResponseDto {
+  hold_id: string;
+  hold_status: "ACTIVE" | "CONVERTED" | "RELEASED" | "EXPIRED";
+  expires_at: string;
+  hold_ttl_seconds: number;
+  booking: BookingDetailDto;
+}
+
+export interface BookingListResponseDto {
+  items: BookingDetailDto[];
+}
+
+export interface PaymentOrderResponseDto {
+  payment_id: string;
+  booking_id: string;
+  provider: "TEST_MODE" | "RAZORPAY";
+  provider_order_id: string;
+  amount_paise: number;
+  currency: string;
+  status: string;
+}
+
+export interface CreateReviewRequestDto {
+  rating: number;
+  hygiene_rating: number;
+  comment?: string | null;
+}
+
+export interface WalkInItemDto {
+  id: string;
+  branch_id: string;
+  staff_id: string | null;
+  resource_id: string | null;
+  customer_name: string;
+  customer_phone_e164: string | null;
+  service_summary: string;
+  quoted_price_paise: number;
+  estimated_duration_minutes: number;
+  queue_position: number;
+  status: WalkInStatus;
+  checked_in_at: string;
+  completed_at: string | null;
+}

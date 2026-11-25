@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
+    default_commission_rate_bps: int = Field(default=800, ge=0, le=5000)
+    commission_gst_bps: int = Field(default=1800, ge=0, le=5000)
 
     storage_provider: Literal["local_signed", "s3", "supabase"] = "local_signed"
     local_storage_dir: str = ".storage"

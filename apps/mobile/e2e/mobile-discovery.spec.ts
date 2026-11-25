@@ -82,11 +82,42 @@ test("mobile Explore, PostGIS filters, EN/HI switch, Branch multi-service slot p
   await slotButtons.first().click();
   await expect(page.getByText(/Selected start time:/)).toBeVisible();
 
-  // 5. Navigate back to Explore and switch to Account tab
+  // 6. Navigate back to Explore, sign in on Account tab as [DEMO] customer
   await page.getByText("Back to salons").click();
   await expect(page.getByText("Verified grooming near you")).toBeVisible();
   await page.getByRole("tab", { name: "Account" }).click();
   await expect(page.getByText("Sign in with mobile OTP")).toBeVisible();
+
+  await page.getByPlaceholder("+919000000003").fill("+919000000003");
+  await page.getByRole("button", { name: "Send verification code" }).click();
+  await expect(page.getByText("Enter verification code")).toBeVisible({ timeout: 10_000 });
+  await page.getByPlaceholder("123456").fill("123456");
+  await page.getByRole("button", { name: "Verify and sign in" }).click();
+  await expect(page.getByText("Signed in as")).toBeVisible({ timeout: 10_000 });
+
+  // 7. Re-open Indiranagar branch, lock a 5-min hold, pay online in Test Mode, verify Check-In OTP & cancel
+  await page.getByRole("tab", { name: "Explore" }).click();
+  await page.getByText("[DEMO] The Brass Comb — Indiranagar").click();
+  await expect(page.getByText("Select services")).toBeVisible({ timeout: 15_000 });
+  const liveSlots = page.getByRole("button").filter({ hasText: /(am|pm|AM|PM)/ });
+  if ((await liveSlots.count()) === 0) {
+    await page.getByRole("button", { name: tomorrowLabel }).click();
+  }
+  await expect(liveSlots.first()).toBeVisible({ timeout: 10_000 });
+  await liveSlots.first().click();
+
+  await page.getByRole("button", { name: "Lock 5-min hold & checkout" }).click();
+  await expect(page.getByText("Confirm your reservation")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Hold expires in:/)).toBeVisible();
+  await page.getByRole("button", { name: /Pay now in Test Mode/ }).click();
+
+  // 8. Lands on My Bookings -> sees CONFIRMED + Check-In OTP -> cancels cleanly
+  await expect(page.getByText("My Bookings")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Show Check-In OTP at desk:/).first()).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByRole("button", { name: "Cancel booking" }).first().click();
+  await expect(page.getByText("Cancelled").first()).toBeVisible({ timeout: 10_000 });
 
   expect(pageErrors).toEqual([]);
   expect(serverErrors).toEqual([]);

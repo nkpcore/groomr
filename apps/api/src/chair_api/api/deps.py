@@ -5,7 +5,12 @@ from typing import Annotated
 from fastapi import Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from chair_api.adapters.base import MockOTPProvider, OTPProvider
+from chair_api.adapters.base import (
+    MockOTPProvider,
+    OTPProvider,
+    PaymentProvider,
+    TestModePaymentAdapter,
+)
 from chair_api.core.auth_store import AuthStore
 from chair_api.core.config import Settings, get_settings
 from chair_api.core.errors import ChairAPIError
@@ -54,3 +59,24 @@ def get_otp_provider(settings: SettingsDep) -> OTPProvider:
 
 
 OTPProviderDep = Annotated[OTPProvider, Depends(get_otp_provider)]
+
+
+def get_payment_provider(settings: SettingsDep) -> PaymentProvider:
+    """Resolve configured payment order/webhook adapter."""
+    if settings.payment_provider == "test_mode":
+        if settings.app_env in ("staging", "production") or not settings.payment_test_mode:
+            raise ChairAPIError(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                code="PAYMENT_PROVIDER_MISCONFIGURED",
+                message=f"Test payment adapter is disabled in {settings.app_env}.",
+            )
+        return TestModePaymentAdapter()
+
+    raise ChairAPIError(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        code="PAYMENT_PROVIDER_UNCONFIGURED",
+        message="Razorpay merchant credentials are not configured in this environment.",
+    )
+
+
+PaymentProviderDep = Annotated[PaymentProvider, Depends(get_payment_provider)]

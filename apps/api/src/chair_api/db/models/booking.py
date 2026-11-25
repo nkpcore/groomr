@@ -47,6 +47,12 @@ class Booking(UUIDTimestampMixin, Base):
     branch_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False
     )
+    slot_hold_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("slot_holds.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="PLATFORM")
     booking_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="INSTANT")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="HELD")

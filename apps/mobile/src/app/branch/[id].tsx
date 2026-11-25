@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -31,6 +31,7 @@ import {
 } from "@chair/shared-types";
 import { formatMobileError, VerifiedDisclaimerFooter } from "@/components/MobileSharedChrome";
 import { useMobileApp } from "@/context/MobileAppContext";
+import { createSlotHold, makeMobileIdempotencyKey } from "@/services/bookingsApi";
 import {
   fetchBranchAvailability,
   fetchBranchDetail,
@@ -41,9 +42,12 @@ import { MOBILE_THEME, TOUCH_TARGET_MIN_DP } from "@/theme/tokens";
 
 export default function BranchDetailScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const branchId = typeof id === "string" ? id : "";
-  const { locale, session, t } = useMobileApp();
+  const { locale, session, setSession, setProfile, t } = useMobileApp();
+  const [holdError, setHoldError] = useState<string | null>(null);
+  const holdIdemKeyRef = useRef<string>(makeMobileIdempotencyKey("hold"));
 
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -117,7 +121,46 @@ export default function BranchDetailScreen() {
 
   useEffect(() => {
     setSelectedSlot(null);
+    setHoldError(null);
   }, [selectedServiceIds, selectedDateIso, selectedStaffId]);
+
+  useEffect(() => {
+    holdIdemKeyRef.current = makeMobileIdempotencyKey("hold");
+  }, [branchId, selectedServiceIds, selectedSlot?.start_at, selectedStaffId]);
+
+  const createHoldMutation = useMutation({
+    mutationFn: async (slot: AvailableSlotDto) => {
+      if (!session) {
+        throw new MobileApiError(401, "AUTHENTICATION_REQUIRED", t.auth.sessionExpired);
+      }
+      return createSlotHold(
+        session,
+        {
+          branch_id: branchId,
+          branch_service_ids: selectedServiceIds,
+          start_at: slot.start_at,
+          staff_id: selectedStaffId,
+        },
+        (next) => {
+          setSession(next);
+          if (!next) {
+            setProfile(null);
+          }
+        },
+        holdIdemKeyRef.current
+      );
+    },
+    onSuccess: (createdHold) => {
+      setHoldError(null);
+      holdIdemKeyRef.current = makeMobileIdempotencyKey("hold");
+      void queryClient.invalidateQueries({ queryKey: ["branch-availability"] });
+      void queryClient.invalidateQueries({ queryKey: ["mobile-bookings"] });
+      router.push({ pathname: "/hold/[id]", params: { id: createdHold.hold_id } });
+    },
+    onError: (err) => {
+      setHoldError(formatMobileError(err, t));
+    },
+  });
 
   const availabilityQuery = useQuery({
     queryKey: [
@@ -490,8 +533,25 @@ export default function BranchDetailScreen() {
                     {selectedSlot.available_staff.map((st) => st.display_name).join(", ")})
                   </Text>
                 )}
-                <Text style={styles.mutedText}>{t.branch.holdPhaseNote}</Text>
-                {!session && (
+                {holdError && (
+                  <View style={styles.errorCard}>
+                    <Text style={styles.errorTitle}>{holdError}</Text>
+                  </View>
+                )}
+                {selectedSlot && session ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={createHoldMutation.isPending}
+                    onPress={() => createHoldMutation.mutate(selectedSlot)}
+                    style={styles.holdPrimaryButton}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {createHoldMutation.isPending
+                        ? t.branch.lockingHold
+                        : t.branch.holdAndCheckoutCta}
+                    </Text>
+                  </Pressable>
+                ) : !session ? (
                   <View style={styles.accountPromptRow}>
                     <Text style={styles.mutedText}>{t.branch.signInToSaveHint}</Text>
                     <Pressable
@@ -500,11 +560,11 @@ export default function BranchDetailScreen() {
                       style={styles.secondaryButton}
                     >
                       <Text style={styles.secondaryButtonText}>
-                        {t.branch.openAccountButton}
+                        {selectedSlot ? t.branch.signInToHoldCta : t.branch.openAccountButton}
                       </Text>
                     </Pressable>
                   </View>
-                )}
+                ) : null}
               </View>
             )}
 
@@ -856,5 +916,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: MOBILE_THEME.colors.charcoalInk,
+  },
+  holdPrimaryButton: {
+    marginTop: 6,
+    minHeight: TOUCH_TARGET_MIN_DP,
+    paddingHorizontal: 18,
+    borderRadius: MOBILE_THEME.radii.sm,
+    backgroundColor: MOBILE_THEME.colors.olivePrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      web: { cursor: "pointer" as unknown as undefined },
+    }),
   },
 });

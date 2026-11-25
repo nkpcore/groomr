@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Compass, User } from "lucide-react-native";
+import { CalendarCheck, Compass, User } from "lucide-react-native";
 import { useMobileApp } from "@/context/MobileAppContext";
 import { MOBILE_THEME } from "@/theme/tokens";
 
@@ -31,6 +31,13 @@ export default function CustomerTabsLayout() {
         options={{
           title: t.navigation.exploreTab,
           tabBarIcon: ({ color, size }) => <Compass size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: t.navigation.bookingsTab,
+          tabBarIcon: ({ color, size }) => <CalendarCheck size={size} color={color} />,
         }}
       />
       <Tabs.Screen

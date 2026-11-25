@@ -149,6 +149,20 @@ class AuthStore(Protocol):
 
     async def clear_otp_verify_failures(self, phone_e164: str) -> None: ...
 
+    async def is_booking_otp_locked(
+        self, otp_scope_key: str, *, max_failures: int
+    ) -> int | None: ...
+
+    async def record_booking_otp_failure(
+        self,
+        *,
+        otp_scope_key: str,
+        window_seconds: int,
+        max_failures: int,
+    ) -> int | None: ...
+
+    async def clear_booking_otp_failures(self, otp_scope_key: str) -> None: ...
+
     async def save_refresh_family(
         self, family: RefreshFamilyRecord, *, ttl_seconds: int
     ) -> None: ...
@@ -325,6 +339,27 @@ class RedisAuthStore:
                 message="Authentication rate-limit store is temporarily unavailable.",
             ) from exc
 
+    async def is_booking_otp_locked(self, otp_scope_key: str, *, max_failures: int) -> int | None:
+        return await self.is_phone_verify_locked(
+            f"booking:{otp_scope_key}", max_failures=max_failures
+        )
+
+    async def record_booking_otp_failure(
+        self,
+        *,
+        otp_scope_key: str,
+        window_seconds: int,
+        max_failures: int,
+    ) -> int | None:
+        return await self.record_otp_verify_failure(
+            phone_e164=f"booking:{otp_scope_key}",
+            window_seconds=window_seconds,
+            max_failures=max_failures,
+        )
+
+    async def clear_booking_otp_failures(self, otp_scope_key: str) -> None:
+        await self.clear_otp_verify_failures(f"booking:{otp_scope_key}")
+
     async def save_refresh_family(
         self, family: RefreshFamilyRecord, *, ttl_seconds: int
     ) -> None:
@@ -493,6 +528,27 @@ class InMemoryAuthStore:
 
     async def clear_otp_verify_failures(self, phone_e164: str) -> None:
         self._counters.pop(f"fail:{phone_e164}", None)
+
+    async def is_booking_otp_locked(self, otp_scope_key: str, *, max_failures: int) -> int | None:
+        return await self.is_phone_verify_locked(
+            f"booking:{otp_scope_key}", max_failures=max_failures
+        )
+
+    async def record_booking_otp_failure(
+        self,
+        *,
+        otp_scope_key: str,
+        window_seconds: int,
+        max_failures: int,
+    ) -> int | None:
+        return await self.record_otp_verify_failure(
+            phone_e164=f"booking:{otp_scope_key}",
+            window_seconds=window_seconds,
+            max_failures=max_failures,
+        )
+
+    async def clear_booking_otp_failures(self, otp_scope_key: str) -> None:
+        await self.clear_otp_verify_failures(f"booking:{otp_scope_key}")
 
     async def save_refresh_family(
         self, family: RefreshFamilyRecord, *, ttl_seconds: int

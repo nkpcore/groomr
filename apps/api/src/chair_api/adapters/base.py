@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -68,9 +69,10 @@ class TestModePaymentAdapter:
     ) -> PaymentOrderResult:
         if amount_paise <= 0:
             raise ValueError("amount_paise must be positive.")
+        short_booking = booking_id.replace("-", "")[:12]
         return PaymentOrderResult(
             provider="TEST_MODE",
-            provider_order_id=f"test_order_{booking_id}",
+            provider_order_id=f"test_order_{short_booking}_{uuid.uuid4().hex[:8]}",
             amount_paise=amount_paise,
             currency=currency,
         )
