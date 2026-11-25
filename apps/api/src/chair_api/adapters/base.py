@@ -38,6 +38,14 @@ class StorageProvider(Protocol):
         self, *, content: bytes, declared_mime: str, max_bytes: int
     ) -> str: ...
 
+    def store_object(self, *, object_key: str, content: bytes) -> None: ...
+
+    def delete_object(self, *, object_key: str) -> None: ...
+
+    def read_object(self, *, object_key: str) -> bytes: ...
+
+    def verify_signed_url(self, *, object_key: str, expires: int, signature: str) -> bool: ...
+
     def create_signed_url(self, *, object_key: str, ttl_seconds: int = 300) -> str: ...
 
 
@@ -114,6 +122,35 @@ class LocalSignedStorageAdapter:
         if declared_mime == "image/webp" and content[8:12] != b"WEBP":
             raise ValueError("Invalid WebP header.")
         return hashlib.sha256(content).hexdigest()
+
+    def _resolve_safe_path(self, object_key: str) -> Path:
+        root_resolved = self.root_dir.resolve()
+        candidate = (root_resolved / object_key).resolve()
+        if not candidate.is_relative_to(root_resolved):
+            raise ValueError("Invalid storage object key path.")
+        return candidate
+
+    def store_object(self, *, object_key: str, content: bytes) -> None:
+        target = self._resolve_safe_path(object_key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+
+    def delete_object(self, *, object_key: str) -> None:
+        target = self._resolve_safe_path(object_key)
+        target.unlink(missing_ok=True)
+
+    def read_object(self, *, object_key: str) -> bytes:
+        target = self._resolve_safe_path(object_key)
+        if not target.is_file():
+            raise FileNotFoundError(f"Object not found: {object_key}")
+        return target.read_bytes()
+
+    def verify_signed_url(self, *, object_key: str, expires: int, signature: str) -> bool:
+        if not signature or expires < int(time.time()):
+            return False
+        msg = f"{object_key}:{expires}".encode()
+        expected = hmac.new(self.signing_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, signature)
 
     def create_signed_url(self, *, object_key: str, ttl_seconds: int = 300) -> str:
         expires = int(time.time()) + ttl_seconds

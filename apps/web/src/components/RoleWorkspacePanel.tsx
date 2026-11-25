@@ -1,24 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Building2, CheckCircle2, Lock, RefreshCw, ShieldAlert } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, Lock, RefreshCw } from "lucide-react";
 import type {
+  AdminVerificationsResponseDto,
   AuditLogListResponseDto,
-  BranchAccessResponseDto,
   PartnerContextResponseDto,
+  SupportedLocale,
   TranslationCatalog,
   UserProfileDto,
 } from "@chair/shared-types";
 import {
   ApiClientError,
   fetchAdminAuditLogs,
-  fetchPartnerBranchAccess,
+  fetchAdminVerifications,
   fetchPartnerContext,
   type StoredWebSession,
 } from "@/lib/api";
+import { AdminGovernanceWorkspace } from "@/components/AdminGovernanceWorkspace";
+import { PartnerOnboardingCard } from "@/components/PartnerOnboardingCard";
+import { PartnerWorkspace } from "@/components/PartnerWorkspace";
 
 interface RoleWorkspacePanelProps {
   surfaceKey: "customer" | "partner" | "admin";
+  locale: SupportedLocale;
   t: TranslationCatalog;
   session: StoredWebSession;
   profile: UserProfileDto;
@@ -27,6 +32,7 @@ interface RoleWorkspacePanelProps {
 
 export function RoleWorkspacePanel({
   surfaceKey,
+  locale,
   t,
   session,
   profile,
@@ -39,10 +45,15 @@ export function RoleWorkspacePanel({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [partnerData, setPartnerData] = useState<PartnerContextResponseDto | null>(null);
-  const [branchProbe, setBranchProbe] = useState<Record<string, BranchAccessResponseDto | string>>(
-    {}
-  );
   const [auditData, setAuditData] = useState<AuditLogListResponseDto | null>(null);
+  const [verificationsData, setVerificationsData] = useState<AdminVerificationsResponseDto | null>(
+    null
+  );
+
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const loadRoleSurface = useCallback(async () => {
     if (surfaceKey === "customer") {
@@ -54,13 +65,18 @@ export function RoleWorkspacePanel({
     setLoading(true);
     setErrorCode(null);
     setErrorMessage(null);
+    const activeSession = sessionRef.current;
     try {
       if (surfaceKey === "partner") {
-        const res = await fetchPartnerContext(session, onSessionUpdate);
+        const res = await fetchPartnerContext(activeSession, onSessionUpdate);
         setPartnerData(res);
       } else {
-        const res = await fetchAdminAuditLogs(session, 20, onSessionUpdate);
-        setAuditData(res);
+        const [auditRes, verificationsRes] = await Promise.all([
+          fetchAdminAuditLogs(activeSession, 20, onSessionUpdate),
+          fetchAdminVerifications(activeSession, onSessionUpdate),
+        ]);
+        setAuditData(auditRes);
+        setVerificationsData(verificationsRes);
       }
     } catch (err) {
       if (err instanceof ApiClientError) {
@@ -81,21 +97,11 @@ export function RoleWorkspacePanel({
     } finally {
       setLoading(false);
     }
-  }, [onSessionUpdate, session, surfaceKey]);
+  }, [onSessionUpdate, surfaceKey]);
 
   useEffect(() => {
     void loadRoleSurface();
-  }, [loadRoleSurface]);
-
-  async function verifyBranch(branchId: string) {
-    try {
-      const access = await fetchPartnerBranchAccess(session, branchId, onSessionUpdate);
-      setBranchProbe((prev) => ({ ...prev, [branchId]: access }));
-    } catch (err) {
-      const msg = err instanceof ApiClientError ? err.message : t.partner.accessDenied;
-      setBranchProbe((prev) => ({ ...prev, [branchId]: msg }));
-    }
-  }
+  }, [loadRoleSurface, session.userId]);
 
   if (surfaceKey === "customer") {
     return (
@@ -117,7 +123,7 @@ export function RoleWorkspacePanel({
     );
   }
 
-  if (loading) {
+  if (loading && !partnerData && !auditData && !verificationsData) {
     return (
       <section className="rounded-lg border border-[#E2DACD] bg-[#F4EFE6] p-6">
         <div className="flex items-center gap-3 text-sm text-[#524E48]">
@@ -134,22 +140,36 @@ export function RoleWorkspacePanel({
 
   if (errorCode === "permission") {
     return (
-      <section
-        role="alert"
-        className="rounded-lg border border-[#9E3B33]/35 bg-[#F9ECEA] p-6 text-[#1C1B19]"
-      >
-        <div className="flex items-start gap-3">
-          <Lock className="mt-0.5 h-5 w-5 shrink-0 text-[#9E3B33]" aria-hidden="true" />
-          <div>
-            <p className="text-base font-semibold">{t.states.permissionDenied}</p>
-            <p className="mt-1 text-sm text-[#524E48]">
-              {surfaceKey === "partner"
-                ? t.partner.permissionDeniedDetail
-                : t.admin.permissionDeniedDetail}
-            </p>
+      <div className="space-y-6">
+        <section
+          role="alert"
+          className="rounded-lg border border-[#9E3B33]/35 bg-[#F9ECEA] p-6 text-[#1C1B19]"
+        >
+          <div className="flex items-start gap-3">
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-[#9E3B33]" aria-hidden="true" />
+            <div>
+              <p className="text-base font-semibold">{t.states.permissionDenied}</p>
+              <p className="mt-1 text-sm text-[#524E48]">
+                {surfaceKey === "partner"
+                  ? t.partner.permissionDeniedDetail
+                  : t.admin.permissionDeniedDetail}
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+        {surfaceKey === "partner" ? (
+          <section className="rounded-lg border border-[#E2DACD] bg-[#F4EFE6] p-6">
+            <PartnerOnboardingCard
+              t={t}
+              session={session}
+              onSessionUpdate={onSessionUpdate}
+              onOnboarded={async () => {
+                await loadRoleSurface();
+              }}
+            />
+          </section>
+        ) : null}
+      </div>
     );
   }
 
@@ -185,125 +205,25 @@ export function RoleWorkspacePanel({
 
   if (surfaceKey === "partner" && partnerData) {
     return (
-      <section className="rounded-lg border border-[#E2DACD] bg-[#F4EFE6] p-6">
-        <div className="flex items-center gap-2.5">
-          <Building2 className="h-5 w-5 text-[#4A5D4E]" aria-hidden="true" />
-          <h2
-            className="text-lg font-medium text-[#1C1B19]"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {t.partner.workspaceHeading}
-          </h2>
-        </div>
-
-        {partnerData.branches.length === 0 ? (
-          <p className="mt-4 rounded-md border border-[#E2DACD] bg-[#FAF7F2] p-4 text-sm text-[#524E48]">
-            {t.partner.emptyBranches}
-          </p>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {partnerData.branches.map((branch) => {
-              const probeState = branchProbe[branch.id];
-              return (
-                <article
-                  key={branch.id}
-                  className="rounded-md border border-[#E2DACD] bg-[#FAF7F2] p-4"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-base font-semibold text-[#1C1B19]">{branch.name}</h3>
-                      <p className="mt-0.5 text-xs text-[#524E48]">
-                        {branch.city}, {branch.state}
-                      </p>
-                    </div>
-                    <span className="rounded bg-[#E7ECE8] px-2 py-0.5 text-xs font-medium text-[#1C1B19]">
-                      {branch.verification_status}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-[#524E48]">
-                    {branch.online_booking_paused
-                      ? t.partner.pausedLabel
-                      : t.partner.activeLabel}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void verifyBranch(branch.id)}
-                      className="min-h-[44px] rounded-md border border-[#E2DACD] bg-[#F4EFE6] px-3.5 text-xs font-semibold text-[#1C1B19] hover:border-[#4A5D4E]"
-                    >
-                      {t.partner.checkBranchAccess}
-                    </button>
-                    {probeState && typeof probeState !== "string" ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-[#4A5D4E]">
-                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t.partner.accessGranted}
-                      </span>
-                    ) : typeof probeState === "string" ? (
-                      <span className="text-xs text-[#9E3B33]">{probeState}</span>
-                    ) : null}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <PartnerWorkspace
+        t={t}
+        locale={locale}
+        session={session}
+        partnerData={partnerData}
+        onSessionUpdate={onSessionUpdate}
+        onRefreshContext={loadRoleSurface}
+      />
     );
   }
 
   return (
-    <section className="rounded-lg border border-[#E2DACD] bg-[#F4EFE6] p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <ShieldAlert className="h-5 w-5 text-[#4A5D4E]" aria-hidden="true" />
-          <h2
-            className="text-lg font-medium text-[#1C1B19]"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {t.admin.auditHeading}
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadRoleSurface()}
-          className="min-h-[44px] rounded-md border border-[#E2DACD] bg-[#FAF7F2] px-3.5 text-xs font-semibold text-[#1C1B19] hover:border-[#4A5D4E]"
-        >
-          {t.admin.refreshLogs}
-        </button>
-      </div>
-
-      {!auditData || auditData.items.length === 0 ? (
-        <p className="mt-4 rounded-md border border-[#E2DACD] bg-[#FAF7F2] p-4 text-sm text-[#524E48]">
-          {t.admin.emptyLogs}
-        </p>
-      ) : (
-        <div className="mt-4 overflow-x-auto rounded-md border border-[#E2DACD] bg-[#FAF7F2]">
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr className="border-b border-[#E2DACD] text-[#524E48]">
-                <th className="px-3 py-2.5 font-semibold">{t.admin.actionColumn}</th>
-                <th className="px-3 py-2.5 font-semibold">{t.admin.actorRoleColumn}</th>
-                <th className="px-3 py-2.5 font-semibold">{t.admin.resourceColumn}</th>
-                <th className="px-3 py-2.5 font-semibold">{t.admin.timeColumn}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditData.items.map((item) => (
-                <tr key={item.id} className="border-b border-[#E2DACD]/60 last:border-b-0">
-                  <td className="px-3 py-2.5 font-mono font-medium text-[#1C1B19]">
-                    {item.action}
-                  </td>
-                  <td className="px-3 py-2.5 text-[#524E48]">{item.actor_role}</td>
-                  <td className="px-3 py-2.5 text-[#524E48]">
-                    {item.resource_type}:{item.resource_id.slice(0, 8)}
-                  </td>
-                  <td className="px-3 py-2.5 tabular-nums text-[#524E48]">{item.created_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+    <AdminGovernanceWorkspace
+      t={t}
+      session={session}
+      auditData={auditData}
+      verificationsData={verificationsData}
+      onSessionUpdate={onSessionUpdate}
+      onRefreshAll={loadRoleSurface}
+    />
   );
 }

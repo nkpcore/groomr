@@ -6,9 +6,11 @@ from fastapi import Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from chair_api.adapters.base import (
+    LocalSignedStorageAdapter,
     MockOTPProvider,
     OTPProvider,
     PaymentProvider,
+    StorageProvider,
     TestModePaymentAdapter,
 )
 from chair_api.core.auth_store import AuthStore
@@ -80,3 +82,27 @@ def get_payment_provider(settings: SettingsDep) -> PaymentProvider:
 
 
 PaymentProviderDep = Annotated[PaymentProvider, Depends(get_payment_provider)]
+
+
+def get_storage_provider(settings: SettingsDep) -> StorageProvider:
+    """Resolve configured private object storage adapter."""
+    if settings.storage_provider == "local_signed":
+        if settings.app_env in ("staging", "production"):
+            raise ChairAPIError(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                code="STORAGE_PROVIDER_MISCONFIGURED",
+                message=f"Local signed storage is disabled in {settings.app_env}.",
+            )
+        return LocalSignedStorageAdapter(
+            root_dir=settings.local_storage_dir,
+            signing_secret=settings.storage_signing_secret,
+        )
+
+    raise ChairAPIError(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        code="STORAGE_PROVIDER_UNCONFIGURED",
+        message="Private cloud storage credentials are not provisioned in this environment.",
+    )
+
+
+StorageProviderDep = Annotated[StorageProvider, Depends(get_storage_provider)]

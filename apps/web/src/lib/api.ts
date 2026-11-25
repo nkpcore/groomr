@@ -1,20 +1,34 @@
 import type {
+  AdminVerificationsResponseDto,
   ApiErrorEnvelope,
   AuditLogListResponseDto,
   AuthTokenResponse,
+  BookingDetailDto,
+  BookingListResponseDto,
   BranchAccessResponseDto,
+  BranchResourceDto,
+  BranchSetupStateDto,
   ConsentsResponseDto,
+  DocumentReviewStatus,
+  DocumentType,
   HealthResponse,
   OTPRequestPayload,
   OTPRequestResponse,
   OTPVerifyPayload,
+  PartnerBranchServiceDto,
   PartnerContextResponseDto,
   PlatformMetaResponse,
+  ResourceType,
+  SalonDocumentDto,
+  ScheduleBlockDto,
+  ScheduleBlockType,
   SupportedLocale,
   UpdateConsentsRequestDto,
   UpdateProfileRequestDto,
   UserProfileDto,
   UserRole,
+  WalkInItemDto,
+  WalkInStatus,
 } from "@chair/shared-types";
 
 export interface ApiProbeResult {
@@ -387,4 +401,386 @@ export function fetchAdminAuditLogs(
     {},
     onSessionUpdate
   );
+}
+
+export function createPartnerSalon(
+  session: StoredWebSession,
+  payload: {
+    legal_name: string;
+    brand_name: string;
+    gstin?: string | null;
+    pan_masked?: string | null;
+    branch_name: string;
+    address_line1: string;
+    city: string;
+    state: string;
+    pincode: string;
+    lat: number;
+    lng: number;
+    initial_chair_count?: number;
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ salon: { id: string }; branch: { id: string; slug: string } }> {
+  return authorizedRequest(
+    "/partner/salons",
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function fetchPartnerBranchSetup(
+  session: StoredWebSession,
+  branchId: string,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<BranchSetupStateDto> {
+  return authorizedRequest<BranchSetupStateDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/setup`,
+    session,
+    {},
+    onSessionUpdate
+  );
+}
+
+export function togglePartnerBranchPause(
+  session: StoredWebSession,
+  branchId: string,
+  paused: boolean,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ branch_id: string; online_booking_paused: boolean }> {
+  return authorizedRequest(
+    `/partner/branches/${encodeURIComponent(branchId)}/pause`,
+    session,
+    { method: "PATCH", body: JSON.stringify({ paused }) },
+    onSessionUpdate
+  );
+}
+
+export function fetchPartnerBranchBookings(
+  session: StoredWebSession,
+  branchId: string,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<BookingListResponseDto> {
+  return authorizedRequest<BookingListResponseDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/bookings`,
+    session,
+    {},
+    onSessionUpdate
+  );
+}
+
+export function partnerTransitionBooking(
+  session: StoredWebSession,
+  branchId: string,
+  bookingId: string,
+  action: "check-in" | "start" | "complete" | "no-show" | "cancel",
+  body: Record<string, unknown>,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<BookingDetailDto> {
+  const headers: Record<string, string> = {};
+  if (action === "cancel") {
+    headers["Idempotency-Key"] =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `cancel-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+  return authorizedRequest<BookingDetailDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/bookings/${encodeURIComponent(bookingId)}/${action}`,
+    session,
+    { method: "POST", headers, body: JSON.stringify(body) },
+    onSessionUpdate
+  );
+}
+
+export function fetchPartnerWalkIns(
+  session: StoredWebSession,
+  branchId: string,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ items: WalkInItemDto[] }> {
+  return authorizedRequest<{ items: WalkInItemDto[] }>(
+    `/partner/branches/${encodeURIComponent(branchId)}/walk-ins`,
+    session,
+    {},
+    onSessionUpdate
+  );
+}
+
+export function createPartnerWalkIn(
+  session: StoredWebSession,
+  branchId: string,
+  payload: {
+    customer_name: string;
+    customer_phone_e164?: string | null;
+    service_summary: string;
+    quoted_price_paise: number;
+    estimated_duration_minutes: number;
+    staff_id?: string | null;
+    resource_id?: string | null;
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<WalkInItemDto> {
+  return authorizedRequest<WalkInItemDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/walk-ins`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function updatePartnerWalkIn(
+  session: StoredWebSession,
+  branchId: string,
+  walkInId: string,
+  payload: { status: WalkInStatus; staff_id?: string | null; resource_id?: string | null },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<WalkInItemDto> {
+  return authorizedRequest<WalkInItemDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/walk-ins/${encodeURIComponent(walkInId)}`,
+    session,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function updatePartnerBranchHours(
+  session: StoredWebSession,
+  branchId: string,
+  operating_hours: Record<string, { open: string; close: string } | null>,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ branch_id: string }> {
+  return authorizedRequest(
+    `/partner/branches/${encodeURIComponent(branchId)}/hours`,
+    session,
+    { method: "PATCH", body: JSON.stringify({ operating_hours }) },
+    onSessionUpdate
+  );
+}
+
+export function createPartnerBranchService(
+  session: StoredWebSession,
+  branchId: string,
+  payload: {
+    service_id: string;
+    display_name_en: string;
+    display_name_hi: string;
+    price_paise: number;
+    duration_minutes: number;
+    buffer_before_minutes?: number;
+    buffer_after_minutes?: number;
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<PartnerBranchServiceDto> {
+  return authorizedRequest<PartnerBranchServiceDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/services`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function updatePartnerBranchService(
+  session: StoredWebSession,
+  branchId: string,
+  branchServiceId: string,
+  payload: { is_active?: boolean; price_paise?: number; duration_minutes?: number },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<PartnerBranchServiceDto> {
+  return authorizedRequest<PartnerBranchServiceDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/services/${encodeURIComponent(branchServiceId)}`,
+    session,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function createPartnerStaff(
+  session: StoredWebSession,
+  branchId: string,
+  payload: {
+    display_name: string;
+    bio?: string | null;
+    specializations?: string[];
+    qualified_branch_service_ids: string[];
+    shifts: { weekday: number; start_time: string; end_time: string; timezone?: string }[];
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ id: string }> {
+  return authorizedRequest(
+    `/partner/branches/${encodeURIComponent(branchId)}/staff`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function createPartnerScheduleBlock(
+  session: StoredWebSession,
+  branchId: string,
+  payload: {
+    staff_id?: string | null;
+    block_type: ScheduleBlockType;
+    start_at: string;
+    end_at: string;
+    reason?: string | null;
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<ScheduleBlockDto> {
+  return authorizedRequest<ScheduleBlockDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/blocks`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function deletePartnerScheduleBlock(
+  session: StoredWebSession,
+  branchId: string,
+  blockId: string,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ deleted: boolean }> {
+  return authorizedRequest(
+    `/partner/branches/${encodeURIComponent(branchId)}/blocks/${encodeURIComponent(blockId)}`,
+    session,
+    { method: "DELETE" },
+    onSessionUpdate
+  );
+}
+
+export function createPartnerResource(
+  session: StoredWebSession,
+  branchId: string,
+  payload: { name: string; resource_type: ResourceType; is_active?: boolean },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<BranchResourceDto> {
+  return authorizedRequest<BranchResourceDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/resources`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function uploadPartnerDocument(
+  session: StoredWebSession,
+  branchId: string,
+  payload: { document_type: DocumentType; mime_type: string; content_base64: string },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<SalonDocumentDto> {
+  return authorizedRequest<SalonDocumentDto>(
+    `/partner/branches/${encodeURIComponent(branchId)}/documents`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function fetchAdminVerifications(
+  session: StoredWebSession,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<AdminVerificationsResponseDto> {
+  return authorizedRequest<AdminVerificationsResponseDto>(
+    "/admin/verifications",
+    session,
+    {},
+    onSessionUpdate
+  );
+}
+
+export function reviewAdminDocument(
+  session: StoredWebSession,
+  documentId: string,
+  payload: { review_status: Exclude<DocumentReviewStatus, "PENDING">; rejection_reason?: string | null },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<SalonDocumentDto> {
+  return authorizedRequest<SalonDocumentDto>(
+    `/admin/documents/${encodeURIComponent(documentId)}`,
+    session,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function recordAdminInspection(
+  session: StoredWebSession,
+  branchId: string,
+  payload: {
+    numerical_score: number;
+    single_use_blades_ok: boolean;
+    sharps_disposal_ok: boolean;
+    instrument_disinfection_ok: boolean;
+    fresh_towels_ok: boolean;
+    corrective_action_notes?: string | null;
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ branch_status: string; verification_status: string }> {
+  return authorizedRequest(
+    `/admin/branches/${encodeURIComponent(branchId)}/inspections`,
+    session,
+    { method: "POST", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export function updateAdminBranchGovernance(
+  session: StoredWebSession,
+  branchId: string,
+  payload: {
+    status?: string | null;
+    verification_status?: string | null;
+    is_featured?: boolean | null;
+    featured_disclosure_label?: string | null;
+    notes?: string | null;
+  },
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{
+  branch_id: string;
+  status: string;
+  verification_status: string;
+  is_featured: boolean;
+  featured_disclosure_label: string | null;
+}> {
+  return authorizedRequest(
+    `/admin/branches/${encodeURIComponent(branchId)}/governance`,
+    session,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    onSessionUpdate
+  );
+}
+
+export async function fetchSignedPrivateAsset(
+  session: StoredWebSession,
+  signedPath: string,
+  onSessionUpdate?: (next: StoredWebSession | null) => void
+): Promise<{ blobUrl: string; mimeType: string }> {
+  if (!isBrowserOnline()) {
+    throw new ApiClientError(0, "OFFLINE", "Browser appears offline.");
+  }
+  const origin = getApiBaseUrl().replace(/\/api\/v1\/?$/, "");
+  const fullUrl = signedPath.startsWith("http") ? signedPath : `${origin}${signedPath}`;
+
+  const tryFetch = (token: string) =>
+    fetch(fullUrl, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+  let res = await tryFetch(session.accessToken);
+  if (res.status === 401) {
+    const next = await rotateStoredSession(session);
+    if (next) {
+      onSessionUpdate?.(next);
+      res = await tryFetch(next.accessToken);
+    } else {
+      onSessionUpdate?.(null);
+    }
+  }
+  if (!res.ok) {
+    throw new ApiClientError(res.status, "SIGNED_ASSET_FETCH_FAILED", `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  return {
+    blobUrl: URL.createObjectURL(blob),
+    mimeType: res.headers.get("content-type") || blob.type || "application/octet-stream",
+  };
 }

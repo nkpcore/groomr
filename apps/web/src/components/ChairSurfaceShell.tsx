@@ -239,6 +239,7 @@ export function ChairSurfaceShell({ surfaceKey }: ChairSurfaceShellProps) {
             <>
               <RoleWorkspacePanel
                 surfaceKey={surfaceKey}
+                locale={locale}
                 t={t}
                 session={session}
                 profile={profile}

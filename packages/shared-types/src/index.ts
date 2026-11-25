@@ -623,3 +623,178 @@ export interface WalkInItemDto {
   checked_in_at: string;
   completed_at: string | null;
 }
+
+export type DocumentType =
+  | "OWNER_ID"
+  | "BUSINESS_REGISTRATION"
+  | "SHOP_ESTABLISHMENT_LICENSE"
+  | "MUNICIPAL_TRADE_LICENSE"
+  | "ADDRESS_PROOF"
+  | "BANK_PROOF";
+
+export type DocumentReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type InspectionOutcome =
+  | "SCHEDULED"
+  | "PASSED"
+  | "CORRECTIVE_ACTION_REQUIRED"
+  | "FAILED_CRITICAL";
+
+export type ScheduleBlockType = "BREAK" | "LEAVE" | "HOLIDAY" | "MAINTENANCE";
+export type ResourceType = "BARBER_CHAIR" | "WASH_STATION" | "VIP_ROOM";
+
+export interface CatalogServiceItemDto {
+  id: string;
+  code: string;
+  name_en: string;
+  name_hi: string;
+  category: ServiceCategory;
+  default_duration_minutes: number;
+}
+
+export interface PartnerBranchServiceDto {
+  id: string;
+  service_id: string;
+  code: string;
+  category: ServiceCategory;
+  display_name_en: string;
+  display_name_hi: string;
+  description: string | null;
+  price_paise: number;
+  duration_minutes: number;
+  buffer_before_minutes: number;
+  buffer_after_minutes: number;
+  is_active: boolean;
+}
+
+export interface StaffShiftDto {
+  id: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  timezone: string;
+}
+
+export interface PartnerStaffDto {
+  id: string;
+  branch_id: string;
+  display_name: string;
+  bio: string | null;
+  specializations: string[];
+  is_verified_staff: boolean;
+  is_accepting_bookings: boolean;
+  status: string;
+  qualified_branch_service_ids: string[];
+  shifts: StaffShiftDto[];
+}
+
+export interface ScheduleBlockDto {
+  id: string;
+  branch_id: string;
+  staff_id: string | null;
+  block_type: ScheduleBlockType;
+  start_at: string;
+  end_at: string;
+  reason: string | null;
+}
+
+export interface BranchResourceDto {
+  id: string;
+  branch_id: string;
+  name: string;
+  resource_type: ResourceType;
+  is_active: boolean;
+}
+
+export interface SalonDocumentDto {
+  id: string;
+  salon_id: string;
+  branch_id: string | null;
+  document_type: DocumentType;
+  mime_type: string;
+  size_bytes: number;
+  sha256_hex: string;
+  review_status: DocumentReviewStatus;
+  rejection_reason: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  signed_url: string;
+}
+
+export interface HygieneInspectionDto {
+  id: string;
+  branch_id: string;
+  overall_outcome: InspectionOutcome;
+  numerical_score: number;
+  single_use_blades_ok: boolean;
+  sharps_disposal_ok: boolean;
+  instrument_disinfection_ok: boolean;
+  fresh_towels_ok: boolean;
+  corrective_action_notes: string | null;
+  reinspection_due_at: string | null;
+  completed_at: string | null;
+}
+
+export interface BranchSetupStateDto {
+  branch: {
+    id: string;
+    salon_id: string;
+    salon_brand_name: string;
+    salon_status: string;
+    name: string;
+    slug: string;
+    address_line1: string;
+    address_line2: string | null;
+    city: string;
+    state: string;
+    pincode: string;
+    lat: number;
+    lng: number;
+    operating_hours_json: Record<string, { open: string; close: string } | null>;
+    online_booking_paused: boolean;
+    is_featured: boolean;
+    featured_disclosure_label: string | null;
+    status: string;
+    verification_status: BranchVerificationStatus;
+  };
+  catalog_services: CatalogServiceItemDto[];
+  branch_services: PartnerBranchServiceDto[];
+  staff: PartnerStaffDto[];
+  schedule_blocks: ScheduleBlockDto[];
+  resources: BranchResourceDto[];
+  documents: SalonDocumentDto[];
+  latest_inspection: HygieneInspectionDto | null;
+}
+
+export interface AdminVerificationBranchDto {
+  branch_id: string;
+  salon_id: string;
+  salon_brand_name: string;
+  salon_legal_name: string;
+  salon_status: string;
+  gstin: string | null;
+  pan_masked: string | null;
+  branch_name: string;
+  city: string;
+  state: string;
+  lat: number;
+  lng: number;
+  branch_status: string;
+  verification_status: BranchVerificationStatus;
+  is_featured: boolean;
+  featured_disclosure_label: string | null;
+  documents: SalonDocumentDto[];
+  verification_checks: {
+    id: string;
+    check_type: string;
+    status: string;
+    notes: string | null;
+    updated_at: string;
+  }[];
+  latest_inspection: HygieneInspectionDto | null;
+}
+
+export interface AdminVerificationsResponseDto {
+  verification_disclaimer: string;
+  items: AdminVerificationBranchDto[];
+}
